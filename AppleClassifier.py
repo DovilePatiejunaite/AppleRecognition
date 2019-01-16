@@ -1,41 +1,43 @@
 #!/usr/bin/env python
-import sys
 from optparse import OptionParser
-
 from SimpleCV import *
 
 
-class SnackClassify():
+class AppleClassifier:
 
     def __init__(self):
-        pass
+        self.classifier = None
+        self.options = None
 
-    def load(self, classifierFile):
-        self.classifier = TreeClassifier.load(classifierFile)
+    def load(self, classifier_file_name):
+        self.classifier = TreeClassifier.load(classifier_file_name)
 
-    def classify(self, imageFile):
-        image = Image(imageFile)
+    @staticmethod
+    def get_class_name_from_path(training_path):
+        classes = []
+        directory_list = os.listdir(training_path)
+        for directory_name in directory_list:
+            if os.path.isdir(training_path + '/' + directory_name):
+                classes.append(directory_name)
+        return classes
+
+    def classify(self, image_file_name):
+        image = Image(image_file_name)
         return self.classifier.classify(image)
 
-    def test(self):
-        paths = ["test/"+c for c in self.classifier.mClassNames]
-        self.classifier.test(paths, self.classifier.mClassNames)
+    def test_classifier(self, classes):
+        testing_paths = ['testing/' + c for c in classes]
+        print "Test results", self.classifier.test(testing_paths, classes, verbose=False), "\n"
 
-    def classNames(self):
+    def class_names(self):
         return self.classifier.mClassNames
 
     def parse_options(self, args):
-        """
-        Parse command-line options
-        """
-        usage = "%prog [options] -c <classifier_file> -i <image>"
-        parser = OptionParser(usage=usage)
-        parser.add_option("-g", "--debug", action="store_true", dest="debug", default=False,
-                          help="debugging mode"),
+        parser = OptionParser()
         parser.add_option("-c", "--classifier", action="store", dest="classifier_file", default="",
                           help="load classifier from file"),
-        parser.add_option("-i", "--image", action="store", dest="image_file", default="",
-                          help="classify this image file"),
+        # parser.add_option("-i", "--image", action="store", dest="image_file", default="",
+                          # help="classify this image file"),
 
         (self.options, args) = parser.parse_args(args)
 
@@ -44,20 +46,25 @@ class SnackClassify():
             exit(0)
 
 
-def process():
-    snack_bot = SnackClassify()
-    snack_bot.parse_options(sys.argv)
+def main():
+    apple_classifier = AppleClassifier()
+    apple_classifier.parse_options(sys.argv)
 
-    classifierFile = snack_bot.options.classifier_file
-    imageFile = snack_bot.options.image_file
+    classifier_file = apple_classifier.options.classifier_file
+    print "Loading classifier ..\n"
+    apple_classifier.load(classifier_file)
+  #  class_name = apple_classifier.classify(image_file)
 
-    snack_bot.load(classifierFile)
-    class_name = snack_bot.classify(imageFile)
-    snack_bot.test()
-    print class_name
+    while True:
+        image_name = raw_input("Enter image name or 'exit' to exit the program:\n")
+        if image_name != 'exit':
+            class_name = apple_classifier.classify(image_name)
+            print "Apple class: ", class_name, "\n"
+        else:
+            break
 
-"""
-main program
-"""
+   # print class_name
+
+
 if __name__ == "__main__":
-	process()
+    main()

@@ -1,151 +1,143 @@
 #!/usr/bin/env python
-import os
-import sys
 from optparse import OptionParser
 from SimpleCV import *
 
 
-class SnackTrainer():
+class Trainer:
 
     def __init__(self):
         self.classifier = None
+        self.options = None
 
-    def createExtractor(self, extractorName, trainPaths=[]):
-        if (extractorName == 'hue'):
+    def set_classifier(self, classifier):
+            self.classifier = classifier
+
+    def get_classifier(self):
+            return self.classifier
+
+    @staticmethod
+    def create_extractor(extractor_name):
+        if extractor_name == 'hue':
             extractor = HueHistogramFeatureExtractor(10)
-        elif (extractorName == 'edge'):
+        elif extractor_name == 'edge':
             extractor = EdgeHistogramFeatureExtractor(10)
-        elif (extractorName == 'haar'):
+        elif extractor_name == 'haar':
             extractor = HaarLikeFeatureExtractor(fname='haar.txt')
-        elif (extractorName == 'bof'):
-            extractor = BOFFeatureExtractor()
-            extractor.generate(trainPaths, imgs_per_dir=40)
         return extractor
 
-    def createClassifier(self, classifierName, extractors):
-        if (classifierName == 'svm'):
+    @staticmethod
+    def create_classifier(classifier_name, extractors):
+        if classifier_name == 'svm':
             classifier = SVMClassifier(extractors)
-        elif (classifierName == 'tree'):
+        elif classifier_name == 'tree':
             classifier = TreeClassifier(extractors)
-        elif (classifierName == 'bayes'):
+        elif classifier_name == 'bayes':
             classifier = NaiveBayesClassifier(extractors)
-        elif (classifierName == 'knn'):
+        elif classifier_name == 'knn':
             classifier = KNNClassifier(extractors)
         return classifier
 
-    def getClassNameFromPath(self, trainPath):
+    @staticmethod
+    def get_class_name_from_path(training_path):
         classes = []
-        dirList = os.listdir(trainPath)
-        for dirName in dirList:
-            if os.path.isdir(trainPath + '/' + dirName):
-                classes.append(dirName)
+        directory_list = os.listdir(training_path)
+        for directory_name in directory_list:
+            if os.path.isdir(training_path + '/' + directory_name):
+                classes.append(directory_name)
         return classes
 
-    def setClassifier(self, classifier):
-        self.classifier = classifier
+    @staticmethod
+    def save_results(classifier, images, result_path):
+        num = 1
+        for img in images:
+            class_name = classifier.classify(img)
+            img.drawText(class_name, 10, 10, fontsize=20, color=Color.BLUE)
+            img.save(result_path + '/' + 'result_%02d.jpg' % num)
+            num += 1
 
-    def getClassifier(self):
-        return self.classifier
+    def train_classifier(self, classes, training_root_path):
+        training_paths = [training_root_path + '/' + c for c in classes]
+        self.classifier.train(training_paths,classes, verbose=False, savedata='features.tab')
 
-    def trainClassifier(self, classes, trainRootPath, featurePath=None):
-        trainPaths = [trainRootPath + '/' + c for c in classes]
-        if featurePath is None:
-            self.classifier.train(trainPaths, classes, verbose=False)
-        else:
-            self.classifier.train(trainPaths, classes, savedata=featurePath, verbose=False)
+    def test_classifier(self, classes, testing_root_path):
+        testing_paths = [testing_root_path + '/' + c for c in classes]
+        print "Test results", self.classifier.test(testing_paths, classes, verbose=False), "\n"
 
-    def testClassifier(self, classes, testRootPath):
-        testPaths = [testRootPath + '/' + c for c in classes]
-        print self.classifier.test(testPaths, classes, verbose=False)
+    def save_classifier(self, classifier_file_name):
+        self.classifier.save(classifier_file_name)
 
-    def saveClassifierFile(self, classifierFile):
-        self.classifier.save(classifierFile)
-
-    def getClassNames(self):
+    def get_class_names(self):
         return self.classifier.mClassNames
 
-    def classifyImageFile(self, imageFile):
-        image = Image(imageFile)
+    def classify_image(self, image_file_name):
+        image = Image(image_file_name)
         return self.classifier.classify(image)
-
-    def saveResults(self, classifier, imgs, resultPath):
-        num = 1
-        for img in imgs:
-            className = classifier.classify(img)
-            img.drawText(className, 10, 10, fontsize=20, color=Color.BLUE)
-            img.save(resultPath + '/' + 'result_%02d.jpg' % num)
-            num += 1
 
     def parse_options(self, args):
         """
         Parse command-line options
         """
-        usage = "%prog [options] -c <classes> -a <train_path> -t <test_path> -r <result_path> -m <method>"
-        parser = OptionParser(usage=usage)
-        parser.add_option("-g", "--debug", action="store_true", dest="debug", default=False,
-                          help="debugging mode"),
-        parser.add_option("-c", "--class", action="store", dest="classes", default="",
-                          help="detect classes, comma seperated"),
-        parser.add_option("-a", "--train", action="store", dest="train_path", default="train",
+        parser = OptionParser()
+        parser.add_option("-a", "--training", action="store", dest="training_path", default="training",
                           help="training samples path"),
-        parser.add_option("-t", "--test", action="store", dest="test_path", default="test",
+        parser.add_option("-t", "--testing", action="store", dest="test_path", default="testing",
                           help="testing samples path"),
-        parser.add_option("-r", "--result", action="store", dest="result_path", default="result",
+        parser.add_option("-r", "--results", action="store", dest="result_path", default="results",
                           help="testing results path"),
-        parser.add_option("-s", "--classifier", action="store", dest="classifier", default="tree",
+        parser.add_option("-c", "--classifier", action="store", dest="classifier_name", default="tree",
                           help="using classifier (svm|tree|bayes|knn)"),
-        parser.add_option("-f", "--feature", action="store", dest="feature_path", default="features.tab",
-                          help="save training features into file"),
-        parser.add_option("-e", "--save", action="store", dest="classifier_file", default="",
-                          help="save classifier into file"),
-
+        parser.add_option("-d", "--debug", action="store", dest="debug", default="False",
+                          help="to test classifier or not"),
         (self.options, args) = parser.parse_args(args)
 
-        if not self.options.classifier:
+        if not self.options.classifier_name:
             parser.print_help()
             exit(0)
 
 
 def process():
-    snack_trainer = SnackTrainer()
-    snack_trainer.parse_options(sys.argv)
+    # Init trainer and parse options from argv
+    trainer = Trainer()
+    trainer.parse_options(sys.argv)
 
-    debug = snack_trainer.options.debug
-    if snack_trainer.options.classes == "":
-        classes = snack_trainer.getClassNameFromPath(snack_trainer.options.train_path)
-    else:
-        classes = snack_trainer.options.classes.split(',')
-    trainPaths = [snack_trainer.options.train_path + '/' + c for c in classes]
-    testPaths = [snack_trainer.options.test_path + '/' + c for c in classes]
+    classes = trainer.get_class_name_from_path(trainer.options.training_path)
+    training_paths = [trainer.options.training_path + '/' + c for c in classes]
+    testing_paths = [trainer.options.test_path + '/' + c for c in classes]
+    result_path = trainer.options.result_path
+    classifier_name = trainer.options.classifier_name
+    classifier_file_name = "%s.dat" % classifier_name
+
+    # Create feature extractors and classifier
+    print "Using Classifier:", classifier_name, "\n"
     extractors = [
-        snack_trainer.createExtractor('hue'),
-        snack_trainer.createExtractor('edge'),
-        snack_trainer.createExtractor('haar')
+        trainer.create_extractor('hue'),
+        trainer.create_extractor('edge'),
+        trainer.create_extractor('haar')
     ]
-    resultPath = snack_trainer.options.result_path
-    featurePath = snack_trainer.options.feature_path
-    classifierFile = snack_trainer.options.classifier_file
+    classifier = trainer.create_classifier(classifier_name, extractors)
+    trainer.set_classifier(classifier)
 
-    classifier_name = snack_trainer.options.classifier
-    classifier = snack_trainer.createClassifier(classifier_name, extractors)
-    snack_trainer.setClassifier(classifier)
+    # Train classifier
+    print "Training classifier with sets: ", training_paths, "..\n"
+    trainer.train_classifier(classes, trainer.options.training_path)
+    # Test classifier
+    print "Testing classifier with sets: ", testing_paths, "..\n"
+    trainer.test_classifier(classes, trainer.options.test_path)
 
-    print "Using Classifier:", classifier_name
-    print "Training Set:", trainPaths
-    print "Training Features Save As:", featurePath
-    snack_trainer.trainClassifier(classes, snack_trainer.options.train_path, featurePath)
-    snack_trainer.testClassifier(classes, snack_trainer.options.test_path)
-    imgs = ImageSet()
-    for p in testPaths:
-        imgs += ImageSet(p)
-        random.shuffle(imgs)
-    snack_trainer.saveResults(classifier, imgs, resultPath)
-    if classifierFile == "":
-        classifierFile = "%s.dat" % (classifier_name)
+    # Visualize results of classifier by classifying every test image
+    print "Visualizing test results in directory: ", result_path, "..\n"
+    images = ImageSet()
+    for p in testing_paths:
+        images += ImageSet(p)
+    #random.shuffle(images)  # shuffling images for random classification
+    trainer.save_results(classifier, images, result_path)
 
-    print "Classifier Data Save As:", classifierFile
-    classifier.save(classifierFile)
+    # Saving Classifier data
+    print "Classifier data saving as: ", classifier_file_name, "..\n"
+    trainer.save_classifier(classifier_file_name)
+
     print "Done"
+
 
 if __name__ == "__main__":
     process()
